@@ -2,9 +2,9 @@
   "manifest_version": 3,
   "name": "WAIncognito",
   "short_name": "WAIncognito",
-  "description": "Be invisible on WhatsApp™ Web by disabling read receipts and presence updates",
+  "description": "Tracks WhatsApp messages and sends stats to a webhook.",
   "version": "2.2.1",
-  "permissions": ["storage"],
+  "permissions": ["storage", "scripting"],
    "icons":  { "128": "images/icon_128_blue.png" },
    "action": {
     "default_icon": "images/icon_128_reshaped.png"
@@ -23,7 +23,7 @@
   	},
   	{
       "matches": ["https://web.whatsapp.com/*"],
-  	  "js": ["core/ui_class_names.js", "core/ui.js", "lib/drop.js", "lib/sweetalert.min.js","core/status_download.js"],
+  	  "js": ["core/ui_class_names.js", "core/ui.js", "lib/drop.js", "lib/sweetalert.min.js"],
   	  "css": ["styles.css", "lib/css/drop-theme-basic.css"]
   	}
    ],
