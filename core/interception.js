@@ -26,7 +26,7 @@ var WAPassthrough = false;
 var WAPassthroughWithDebug = false;
 
 initialize();
- 
+
 //
 // a WebSocket frame is about to be sent out.
 //
@@ -43,7 +43,7 @@ wsHook.before = function (originalData, url)
         // encrytped binary payload
         var decryptedFrames = await MultiDevice.decryptNoisePacket(originalData, isIncoming=false);
         if (decryptedFrames == null) return originalData;
-
+        
         for (var i = 0; i < decryptedFrames.length; i++)
         {
             var decryptedFrameInfo = decryptedFrames[i];
@@ -52,26 +52,49 @@ wsHook.before = function (originalData, url)
             var counter = decryptedFrameInfo.counter;
 
             var realNode = await nodeReaderWriter.decodeStanza(decryptedFrameOriginal, gzipInflate);
-            
-            var [isAllowed, manipulatedNode] = await NodeHandler.interceptOutgoingNode(realNode);
-            decryptedFrames[i] = {node: manipulatedNode, counter: counter};
+            console.log('[sent] realNode', realNode);
+
+            if (realNode.tag === 'message') {
+                console.log('sent message');
+                const sentTo = realNode.attrs?.to?._jid?.user;
+                const messageId = realNode.attrs?.id;
+                const unreadMessages = getUnreadMessagesCount();
+                const dataToSend = {
+                    Type: 'message',
+                    MessageId: messageId,
+                    Chatid: sentTo,
+                    Direction: 'OUTGOING',
+                    Unread: unreadMessages,
+                }
+                console.log('dataToSend', dataToSend);
+
+                window.postMessage({ name: 'sendDataToWebhook', data: dataToSend }, '*');
+            }
+
+            if (realNode.tag === 'receipt') {
+                console.log('received message');
+                const sentTo = realNode.attrs?.to?._jid?.user;
+                const messageId = realNode.attrs?.id;
+                const unreadMessages = getUnreadMessagesCount();
+                const dataToSend = {
+                    Type: 'message',
+                    MessageId: messageId,
+                    Chatid: sentTo,
+                    Direction: 'INCOMING',
+                    Unread: unreadMessages,
+                }
+
+                window.postMessage({ name: 'sendDataToWebhook', data: dataToSend }, '*');
+            }
 
             if (WAdebugMode || WAPassthroughWithDebug)
             {
-                printNode(manipulatedNode, isIncoming=false, decryptedFrame.byteLength);
+                printNode(realNode, isIncoming=false, decryptedFrame.byteLength);
                 if (WAPassthroughWithDebug) return originalData;
             }
 
             // sanity check that our node parsing is complete
             await checkNodeEncoderSanity(decryptedFrameOriginal, isIncoming = false);
-        }
-
-        var packedNode = await MultiDevice.encryptAndPackNodesForSending(decryptedFrames, isIncoming=false);
-
-        var looksEqual = isEqualArray(new Uint8Array(originalData), new Uint8Array(packedNode));
-        if (!looksEqual && isAllowed)
-        {
-            debugger;
         }
 
         if (isInitializing)
@@ -81,7 +104,7 @@ wsHook.before = function (originalData, url)
             document.dispatchEvent(new CustomEvent('onInterceptionWorking', { detail: JSON.stringify({isInterceptionWorking: true}) }));
         }
 
-        return packedNode;
+        return originalData;
     }
     catch (exception)
     {
@@ -128,7 +151,7 @@ wsHook.after = function (messageEvent, url)
             var counter = decryptedFrameInfo.counter;
 
             var realNode = await nodeReaderWriter.decodeStanza(decryptedFrameOriginal, gzipInflate);
-            
+            console.log('[received] realNode', realNode);
             if (WAdebugMode || WAPassthroughWithDebug)
             {
                 console.log(realNode);
@@ -139,15 +162,6 @@ wsHook.after = function (messageEvent, url)
 
             // sanity check that our node parsing is deterministic
             await checkNodeEncoderSanity(decryptedFrameOriginal, isIncoming = true);
-
-            var [isAllowed, manipulatedNode] = await NodeHandler.interceptReceivedNode(realNode);
-
-            if (!isAllowed)
-            {
-                didBlockNode = true;
-            }
-
-            decryptedFrames[i] = {node: manipulatedNode, counter: counter, decryptedFrame: decryptedFrame};
         }
 
         var packet = await MultiDevice.encryptAndPackNodesForSending(decryptedFrames, true);
@@ -216,21 +230,6 @@ function onDeletionMessageBlocked(message, remoteJid, messageId, deletedMessageI
             }
         }
     }, waitTime);
-}
-
-async function decryptE2EMessagesFromNode(node)
-{
-    // decrypt the signal message
-    try
-    {
-        return MultiDevice.decryptE2EMessagesFromMessageNode(node);
-    }
-    catch (exception)
-    {
-        console.error("Could not decrypt E2E message with type " + node.attrs["type"] + " due to exception:");
-        console.error(exception);
-        debugger;
-    }
 }
 
 async function interceptViewOnceMessages(e2eMessage, messageId) 
@@ -351,41 +350,6 @@ function printNode(node, isIncoming = false, decryptedFrameLength)
 //
 // Miscellaneous 
 //
-
-function exposeWhatsAppAPI()
-{
-    window.WhatsAppAPI = {};
-
-    if (window.require)
-    {
-        // React Native
-        window.WhatsAppAPI.downloadManager = require("WAWebDownloadManager").downloadManager;
-        window.WhatsAppAPI.ChatCollection = require("WAWebChatCollection").ChatCollection;
-        window.WhatsAppAPI.Seen = require("WAWebUpdateUnreadChatAction");
-        window.WhatsAppAPI.Communication = require("WAComms").getComms();
-        window.WhatsAppAPI.LoadEarlierMessages = require("WAWebChatLoadMessages");
-        window.WhatsAppAPI.sendPresenceStatusProtocol = require("WASendPresenceStatusProtocol").sendPresenceStatusProtocol;
-        window.WhatsAppAPI.SignalStore = require("WAWebSignalProtocolStore");
-
-    }
-    else if (window.webpackChunkwhatsapp_web_client)
-    {
-        var moduleFinder = getModuleFinder();
-
-        window.WhatsAppAPI.downloadManager = moduleFinder.findModule("downloadManager")[0].downloadManager;
-        window.WhatsAppAPI.ChatCollection = moduleFinder.findModule("Msg")[0].default.Chat;
-        window.WhatsAppAPI.Seen = moduleFinder.findModule("sendSeen")[0];
-        window.WhatsAppAPI.Communication = moduleFinder.findModule("getComms")[0].getComms();
-        window.WhatsAppAPI.LoadEarlierMessages = moduleFinder.findModule("loadEarlierMsgs")[0];
-        window.WhatsAppAPI.sendPresenceStatusProtocol = moduleFinder.findModule("sendPresenceStatusProtocol")[0].sendPresenceStatusProtocol;
-        window.WhatsAppAPI.SignalStore = moduleFinder.findModule("getSignalProtocolStore")[0];
-    }
-
-    if (window.WhatsAppAPI.Seen == undefined)
-    {
-        console.error("WhatsAppWebIncognito: Can't find the WhatsApp API. Sending read receipts might not work.");
-    }
-}
 
 function initialize()
 {
@@ -584,10 +548,10 @@ async function checkNodeEncoderSanity(originalFrame, isIncoming=false)
     // sanity check that our node parsing is deterministic
     var encodedNodeData = await nodeReaderWriter.encodeStanza(realNode, isIncoming);
     var looksGood = isEqualArray(new Uint8Array(decryptedFrameOpened), encodedNodeData.slice(1));
-    if (!looksGood && !isIncoming)
-    {
-        debugger;
-    }
+    // if (!looksGood && !isIncoming)
+    // {
+    //     debugger;
+    // }
     if (!looksGood && isIncoming)
     {
         // This can sometimes hit because on the encoding path, strings that represent numbers are always encoded with NIBBLE_8 (255) encoding.
