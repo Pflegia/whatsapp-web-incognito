@@ -12,7 +12,7 @@ if (typeof chrome !== "undefined") {
   
       if (messageEvent.name == "sendDataToWebhook") {
           console.log('background dataToSend', messageEvent.data);
-              const webhookUrl = 'http://localhost'; // TODO: dynamically set webhookUrl
+              const webhookUrl = process.env.WEBHOOK_URL;
               fetch(webhookUrl, {
                   method: 'POST',
                   headers: {
