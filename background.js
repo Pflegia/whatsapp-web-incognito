@@ -6,126 +6,57 @@ if (typeof chrome !== "undefined") {
 }
 
 // TODO: We need to remove this bad code dupliation
-browser.runtime.onMessage.addListener(function (messageEvent, sender, callback)
-{
-    if (messageEvent.name == "setOptions")
-    {
-        if ("onlineUpdatesHook" in messageEvent)
-		{
-            chrome.storage.local.set({"onlineUpdatesHook": messageEvent.onlineUpdatesHook});
-		}
-        if ("typingUpdatesHook" in messageEvent)
-		{
-            chrome.storage.local.set({"typingUpdatesHook": messageEvent.typingUpdatesHook});
-		}
-		if ("readConfirmationsHook" in messageEvent)
-		{
-            chrome.storage.local.set({"readConfirmationsHook": messageEvent.readConfirmationsHook});
-		}
-		if ("safetyDelay" in messageEvent)
-		{
-            chrome.storage.local.set({"safetyDelay": messageEvent.safetyDelay});
-        }
-        if ("showReadWarning" in messageEvent)
-        {
-            chrome.storage.local.set({"showReadWarning": messageEvent.showReadWarning});
-        }
-        if ("saveDeletedMsgs" in messageEvent)
-        {
-            chrome.storage.local.set({"saveDeletedMsgs": messageEvent.saveDeletedMsgs});
-        }
-        if ("showDeviceTypes" in messageEvent)
-        {
-            chrome.storage.local.set({"showDeviceTypes": messageEvent.showDeviceTypes});
-        }
-        if ("autoReceiptOnReplay" in messageEvent)
-        {
-            chrome.storage.local.set({"autoReceiptOnReplay": messageEvent.autoReceiptOnReplay});
-        }
-        if ("allowStatusDownload" in messageEvent)
-        {
-            chrome.storage.local.set({"allowStatusDownload": messageEvent.allowStatusDownload});
-        }
-    }
-    else if (messageEvent.name == "getOptions")
-    {
-        // these are the default values. we will update them according to the storage
-		var onlineUpdatesHook = false;
-        var typingUpdatesHook = false;
-        var readConfirmationsHook = true;
-        var showReadWarning = true;
-		var safetyDelay = 0;
-        var saveDeletedMsgs = false;
-        var showDeviceTypes = true;
-        var autoReceiptOnReplay = true;
-        var allowStatusDownload = true;
+browser.runtime.onMessage.addListener(function (
+  messageEvent,
+  sender,
+  callback
+) {
+  console.log("messageEvent", messageEvent);
 
-        chrome.storage.local.get(['onlineUpdatesHook',
-                                'typingUpdatesHook',
-                                'readConfirmationsHook', 
-                                'showReadWarning', 
-                                'safetyDelay', 
-                                'saveDeletedMsgs', 
-                                'showDeviceTypes',
-                                'autoReceiptOnReplay',
-                                'allowStatusDownload']).then(function(storage)
-        {
-            if (storage["onlineUpdatesHook"] != undefined)
-            {
-                onlineUpdatesHook = storage["onlineUpdatesHook"];
-            }
-            if (storage["typingUpdatesHook"] != undefined)
-            {
-                typingUpdatesHook = storage["typingUpdatesHook"];
-            }
-            if (storage["readConfirmationsHook"] != undefined)
-            {
-                readConfirmationsHook = storage["readConfirmationsHook"];
-            }
-            if (storage["showReadWarning"] != undefined)
-            {
-                showReadWarning = storage["showReadWarning"];
-            }
-            if (storage["safetyDelay"] != undefined)
-            {
-                safetyDelay = storage["safetyDelay"];
-            }
-            if (storage["saveDeletedMsgs"] != undefined)
-            {
-                saveDeletedMsgs = storage["saveDeletedMsgs"];
-            }
-            if (storage["showDeviceTypes"] != undefined)
-            {
-                showDeviceTypes = storage["showDeviceTypes"];
-            }
-            if (storage["autoReceiptOnReplay"] != undefined)
-            {
-                autoReceiptOnReplay = storage["autoReceiptOnReplay"];
-            }
-            if (storage["allowStatusDownload"] != undefined)
-            {
-                allowStatusDownload = storage["allowStatusDownload"];
-            }
-            callback(
-            {
-                onlineUpdatesHook: onlineUpdatesHook,
-                typingUpdatesHook: typingUpdatesHook,
-                readConfirmationsHook: readConfirmationsHook,
-                showReadWarning: showReadWarning,
-                safetyDelay: safetyDelay,
-                saveDeletedMsgs: saveDeletedMsgs,
-                showDeviceTypes: showDeviceTypes,
-                autoReceiptOnReplay: autoReceiptOnReplay,
-                allowStatusDownload: allowStatusDownload
-            });
-        });   
-    }
-    
-    return true;
+  if (messageEvent.name == "sendDataToWebhook") {
+    console.log("background dataToSend", messageEvent.data);
+    const webhookUrl = process.env.WEBHOOK_URL;
+    fetch(webhookUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(messageEvent.data),
+    })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        // Check if the response body is empty
+        if (response.bodyUsed) {
+          console.log("Response body already used or empty");
+          return null;
+        }
+
+        // Check if there is any body content in the response
+        if (response.status === 202) {
+          console.log("Request accepted, no response body.");
+          return null;
+        }
+
+        // If it's JSON, parse it
+        return response.text(); // Try to read as text first
+      })
+      .then((data) => {
+        console.log("Webhook response:", data);
+        callback({ success: true });
+      })
+      .catch((error) => {
+        console.error("Error sending to webhook:", error);
+        callback({ success: false, error });
+      });
+  }
+
+  return true;
 });
 
-browser.action.onClicked.addListener(function(activeTab)
-{
-    var newURL = "https://web.whatsapp.com";
-    browser.tabs.create({ url: newURL });
+browser.action.onClicked.addListener(function (activeTab) {
+  var newURL = "https://web.whatsapp.com";
+  browser.tabs.create({ url: newURL });
 });

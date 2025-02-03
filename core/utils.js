@@ -1,6 +1,22 @@
 // -------------------
 // Helper functions
 // --------------------
+function getUnreadMessagesCount() {
+    const unreadElements = document.querySelectorAll('#pane-side span[aria-label*="unread message"]');
+    let totalUnreadCount = 0;
+
+    unreadElements.forEach((element) => {
+        const countText = element.getAttribute("aria-label") || "";
+        console.log('countText', countText);
+        
+        const match = countText.match(/\d+/); // Extract number from text like "5 unread message(s)"
+        if (match) {
+        totalUnreadCount += parseInt(match[0], 10);
+        }
+    });
+
+    return totalUnreadCount;
+}
 
 function findChatEntryElementForJID(jid)
 {

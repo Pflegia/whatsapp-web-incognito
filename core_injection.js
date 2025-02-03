@@ -19,7 +19,6 @@ async function injectOtherScripts()
 	injectScript('core/injected_ui.js');
 	
 	await injectScript('core/multi_device.js');
-	await injectScript('core/node_handler.js');
 	injectScript('core/interception.js');
 
 	setTimeout(
@@ -182,3 +181,38 @@ function webScoketInterception()
 	}
 
 }
+
+// Listen for messages from the injected script
+window.addEventListener('message', (event) => {
+	console.log('event', event);
+	
+    // Verify the message origin to ensure it's trusted
+    if (event.source !== window || event.data.name !== 'sendDataToWebhook') {
+        return;
+    }
+
+    console.log('Message received from injected script:', event.data.data);
+
+	const currentPhone = window.localStorage.getItem('last-wid-md');
+	console.log('currentPhone', currentPhone);
+	const createdBy = currentPhone?.substring(1)?.split(':')[0];
+	console.log('createdBy', createdBy);
+	const dataToSend = {
+		...event.data.data,
+		SentById: createdBy,
+		SentByNumber: createdBy,
+		sentByUserId: createdBy,
+		CreatedByUser: createdBy,
+	}
+
+    // Use chrome.runtime or other Chrome APIs
+	chrome.runtime.sendMessage({ name: 'sendDataToWebhook', data: dataToSend }, response => {
+		if (response && response.success) {
+			console.log('received message Data sent successfully');
+		} else {
+			console.error('Failed to send received message data:', response.error);
+		}
+	});
+	console.log('chrome.runtime.sendMessage');
+	
+});
